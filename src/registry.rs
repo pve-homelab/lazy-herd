@@ -11,7 +11,6 @@ pub enum NavAction {
     /// Leave the current sub-plugin and return to the main menu.
     Back,
     /// Quit the entire Lazy Herd TUI (closes the Herdr pane).
-    #[allow(dead_code)] // reserved for future force-quit from nested screens
     Quit,
 }
 

@@ -54,7 +54,7 @@ command = "lazy-herd.open-windows"   # Linux/macOS: lazy-herd.open
 
 | Feature | What it does |
 |---|---|
-| **Lazy Git** | After you add a forge account (+ PAT in Secrets), always shows your remote repos. Enter → clone. Flow: Workspace → Git → pick repo → clone → work. |
+| **Lazy Git** | Lists your remote repos. Enter → clone → opens a focused Herdr workspace in that folder → closes Lazy Herd so you’re already there. |
 | **Lazy Workspace** | Premade Herdr workspace templates (apply with Enter). Still evolving — try it and tweak. |
 | **Lazy Secrets** | Store PATs/tokens (masked). |
 | **Lazy Connect** | SSH profiles. Enter → manage pane (create / edit / delete / connect). |

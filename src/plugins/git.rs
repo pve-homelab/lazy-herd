@@ -1,6 +1,6 @@
 //! Forge accounts + always-on remote repo browser (clone into your workspace).
 
-use crate::herdr::{run_capture, which_exists};
+use crate::herdr::{run_capture, run_herdr_ok, which_exists};
 use crate::registry::{NavAction, PluginCtx, SubPlugin};
 use crate::storage::{read_json, read_toml, write_toml};
 use crate::ui::draw_select_list;
@@ -252,14 +252,16 @@ impl GitPlugin {
         }
     }
 
-    fn clone_repo(&mut self, ctx: &mut PluginCtx, repo_idx: usize, parent: &str) {
+    /// Clone (or reuse existing path), open a focused Herdr workspace there.
+    /// Returns true when the caller should quit Lazy Herd so you land in that folder.
+    fn clone_repo(&mut self, ctx: &mut PluginCtx, repo_idx: usize, parent: &str) -> bool {
         let Some(repo) = self.repos.get(repo_idx).cloned() else {
             ctx.set_error("no repo selected");
-            return;
+            return false;
         };
         if !which_exists("git") {
             ctx.set_error("git not on PATH");
-            return;
+            return false;
         }
         let leaf = repo
             .name
@@ -268,11 +270,13 @@ impl GitPlugin {
             .unwrap_or(repo.name.as_str())
             .to_string();
         let dest = Path::new(parent).join(&leaf);
+        let dest_str = dest.to_string_lossy().to_string();
+
         if dest.exists() {
-            ctx.set_error(format!("already exists: {}", dest.display()));
-            self.log = format!("Skip clone — path exists:\n{}", dest.display());
-            return;
+            self.log = format!("Already on disk — opening workspace:\n{dest_str}");
+            return self.open_workspace_at(ctx, &dest_str, &leaf);
         }
+
         if let Some(p) = dest.parent() {
             let _ = std::fs::create_dir_all(p);
         }
@@ -289,7 +293,7 @@ impl GitPlugin {
         };
 
         match Command::new("git")
-            .args(["clone", &clone_url, &dest.to_string_lossy()])
+            .args(["clone", &clone_url, &dest_str])
             .output()
         {
             Ok(out) => {
@@ -299,18 +303,39 @@ impl GitPlugin {
                     text.push_str(&String::from_utf8_lossy(&out.stderr));
                 }
                 if out.status.success() {
-                    self.log = format!(
-                        "Cloned {} → {}\n\nTip: Lazy Workspace → apply a template with working_dir = that path\n\n{text}",
-                        repo.name,
-                        dest.display()
-                    );
-                    ctx.set_status(format!("cloned {}", repo.name));
+                    self.log = format!("Cloned {} → {dest_str}\n{text}", repo.name);
+                    ctx.set_status(format!("cloned {} — opening workspace…", repo.name));
+                    self.open_workspace_at(ctx, &dest_str, &leaf)
                 } else {
                     self.log = text;
                     ctx.set_error(format!("git clone failed for {}", repo.name));
+                    false
                 }
             }
-            Err(e) => ctx.set_error(e.to_string()),
+            Err(e) => {
+                ctx.set_error(e.to_string());
+                false
+            }
+        }
+    }
+
+    fn open_workspace_at(&mut self, ctx: &mut PluginCtx, cwd: &str, label: &str) -> bool {
+        match run_herdr_ok(&["workspace", "create", "--cwd", cwd, "--label", label, "--focus"]) {
+            Ok(out) => {
+                self.log = format!(
+                    "Workspace ready at:\n  {cwd}\n\nLazy Herd will close so you can work there.\n{out}"
+                );
+                ctx.set_status(format!("working in {cwd}"));
+                true
+            }
+            Err(e) => {
+                // Clone may have succeeded; still leave the path clear for the user.
+                self.log = format!(
+                    "Repo is at:\n  {cwd}\n\nCould not open Herdr workspace automatically:\n{e}\n\nRun manually:\n  herdr workspace create --cwd \"{cwd}\" --label \"{label}\" --focus"
+                );
+                ctx.set_error("cloned, but workspace create failed — see Output");
+                false
+            }
         }
     }
 
@@ -606,7 +631,7 @@ impl SubPlugin for GitPlugin {
         "Lazy Git"
     }
     fn description(&self) -> &'static str {
-        "After you add a forge account, opens on your full remote repo list. Enter clones a repo. Typical flow: Lazy Workspace → Lazy Git → pick repo → clone → work."
+        "Shows your remote repos. Enter clones, opens a Herdr workspace in that folder (focused), and closes Lazy Herd so you can work there immediately."
     }
 
     fn on_enter(&mut self, ctx: &mut PluginCtx) {
@@ -776,6 +801,7 @@ impl SubPlugin for GitPlugin {
                     FormResult::Cancel => {
                         self.form = None;
                         self.mode = Mode::Browse;
+                        NavAction::None
                     }
                     FormResult::Submit => {
                         let parent = expand_home(
@@ -787,11 +813,15 @@ impl SubPlugin for GitPlugin {
                         );
                         self.form = None;
                         self.mode = Mode::Browse;
-                        self.clone_repo(ctx, repo_idx, &parent);
+                        // Quit closes the Lazy Herd popup after workspace create --focus.
+                        if self.clone_repo(ctx, repo_idx, &parent) {
+                            NavAction::Quit
+                        } else {
+                            NavAction::None
+                        }
                     }
-                    FormResult::Continue => {}
+                    FormResult::Continue => NavAction::None,
                 }
-                NavAction::None
             }
             Mode::FormCommit => {
                 let Some(form) = self.form.as_mut() else {
