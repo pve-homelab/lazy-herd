@@ -1,14 +1,15 @@
 # Lazy Herd
 
-One Herdr plugin. Open it → pick a feature from the menu.
+One [Herdr](https://herdr.dev) plugin: open **Lazy Herd** and pick from Git, Workspace, Secrets, Connect, Agents, Bootstrap, Search, Doctor, Config (and Docs) in a single split-pane menu.
+
+**Plugin id:** `lazy-herd`  
+**Requires:** Herdr ≥ 0.9.0 · Rust/`cargo` on the machine for install builds
 
 ## Install
 
 ```bash
 herdr plugin install pve-homelab/lazy-herd --yes
 ```
-
-Needs: Herdr ≥ 0.9.0 + `cargo` on PATH (install builds the binary).
 
 **Local / linked:**
 
