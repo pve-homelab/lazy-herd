@@ -1,6 +1,8 @@
 # Lazy Herd
 
-## One [Herdr](https://herdr.dev) plugin: open **Lazy Herd** and pick from Git, Workspace, Secrets, Connect, Agents, Bootstrap, Search, Doctor, Config (and Docs) in a single split-pane menu.
+### One [Herdr](https://herdr.dev) plugin
+
+## Open **Lazy Herd** and pick from a suite of _Lazy_ features served in a split-pane menu.
 
 #### **Plugin id:** `lazy-herd`  
 #### **Requires:** Herdr ≥ 0.9.0 · Rust/`cargo` on the machine for install builds
