@@ -1,10 +1,10 @@
-//! SSH profile quick-connect list.
+//! SSH profiles — Enter opens a manage pane (create / edit / delete / connect).
 
 use crate::herdr::{run_herdr_ok, which_exists};
 use crate::registry::{NavAction, PluginCtx, SubPlugin};
 use crate::storage::{list_toml_stem_files, read_toml, write_toml};
-use crate::ui::{ConfirmDelete, ConfirmResult};
 use crate::ui::draw_select_list;
+use crate::ui::{ConfirmDelete, ConfirmResult};
 use crate::ui::{FormField, FormResult, FormState};
 use crate::ui::ScrollList;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -31,8 +31,16 @@ fn default_port() -> u16 {
 }
 
 enum Mode {
+    /// Profile list.
     List,
-    Form { editing: Option<String> },
+    /// Per-profile manage pane: Connect / Edit / Delete / Back.
+    Manage {
+        index: usize,
+        actions: ScrollList,
+    },
+    Form {
+        editing: Option<String>,
+    },
     Confirm(ConfirmDelete),
 }
 
@@ -72,12 +80,13 @@ impl ConnectPlugin {
             Err(e) => ctx.set_error(format!("connect dir: {e}")),
         }
         self.profiles.sort_by(|a, b| a.name.cmp(&b.name));
-        self.list.set_items(
+        let mut items: Vec<String> = vec!["+ New SSH profile".into()];
+        items.extend(
             self.profiles
                 .iter()
-                .map(|p| format!("{}  {}@{}:{}", p.name, p.user, p.host, p.port))
-                .collect(),
+                .map(|p| format!("{}  {}@{}:{}", p.name, p.user, p.host, p.port)),
         );
+        self.list.set_items(items);
     }
 
     fn save_one(&self, ctx: &mut PluginCtx, profile: &SshProfile) {
@@ -103,11 +112,61 @@ impl ConnectPlugin {
         ctx.set_status(format!("deleted {name}"));
     }
 
-    fn open_selected(&mut self, ctx: &mut PluginCtx) {
-        let Some(i) = self.list.selected() else {
+    fn open_manage(&mut self, profile_index: usize, ctx: &mut PluginCtx) {
+        let name = self
+            .profiles
+            .get(profile_index)
+            .map(|p| p.name.as_str())
+            .unwrap_or("?");
+        ctx.set_status(format!("manage {name} · Enter action · Esc list"));
+        self.mode = Mode::Manage {
+            index: profile_index,
+            actions: ScrollList::new(vec![
+                "Connect (SSH in new pane)".into(),
+                "Edit profile".into(),
+                "Delete profile".into(),
+                "Back to list".into(),
+            ]),
+        };
+    }
+
+    fn start_new_form(&mut self) {
+        self.form = Some(FormState::new(
+            "New SSH profile",
+            vec![
+                FormField::new("name"),
+                FormField::new("host"),
+                FormField::new("user").with_value("root"),
+                FormField::new("port").with_value("22"),
+                FormField::new("identity_file"),
+                FormField::new("extra_args"),
+            ],
+        ));
+        self.mode = Mode::Form { editing: None };
+    }
+
+    fn start_edit_form(&mut self, index: usize) {
+        let Some(p) = self.profiles.get(index) else {
             return;
         };
-        let Some(p) = self.profiles.get(i) else {
+        self.form = Some(FormState::new(
+            "Edit SSH profile",
+            vec![
+                FormField::new("name").with_value(&p.name),
+                FormField::new("host").with_value(&p.host),
+                FormField::new("user").with_value(&p.user),
+                FormField::new("port").with_value(p.port.to_string()),
+                FormField::new("identity_file").with_value(&p.identity_file),
+                FormField::new("extra_args").with_value(&p.extra_args),
+            ],
+        ));
+        self.mode = Mode::Form {
+            editing: Some(p.name.clone()),
+        };
+    }
+
+    fn connect_ssh(&mut self, ctx: &mut PluginCtx, index: usize) {
+        let Some(p) = self.profiles.get(index).cloned() else {
             return;
         };
         if !which_exists("ssh") {
@@ -137,21 +196,24 @@ impl ConnectPlugin {
         args.push(target);
         let str_args: Vec<&str> = args.iter().map(String::as_str).collect();
         match run_herdr_ok(&str_args) {
-            Ok(_) => ctx.set_status(format!("opening ssh {}", p.name)),
-            Err(e) => {
-                // Fallback: record the command for the user to run.
-                ctx.set_error(format!(
-                    "herdr pane split failed ({e}). Manual: ssh -p {} {}@{}",
-                    p.port, p.user, p.host
-                ));
-            }
+            Ok(_) => ctx.set_status(format!("SSH → {}", p.name)),
+            Err(e) => ctx.set_error(format!(
+                "pane split failed ({e}). Manual: ssh -p {} {}@{}",
+                p.port, p.user, p.host
+            )),
         }
     }
 }
 
 fn sanitize(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -163,13 +225,13 @@ impl SubPlugin for ConnectPlugin {
         "Lazy Connect"
     }
     fn description(&self) -> &'static str {
-        "Quick SSH profiles for agents and yourself. Create / edit / delete (type name to confirm). Enter opens ssh in a Herdr split when possible."
+        "SSH profiles for any machine. Enter opens a manage pane to create / edit / delete / connect — so you never hunt for credentials again."
     }
 
     fn on_enter(&mut self, ctx: &mut PluginCtx) {
         self.reload(ctx);
         self.mode = Mode::List;
-        ctx.set_status("n new · e edit · d delete · Enter open · Esc back");
+        ctx.set_status("Enter = manage pane · Esc back");
     }
 
     fn handle(&mut self, ctx: &mut PluginCtx, key: KeyEvent) -> NavAction {
@@ -181,51 +243,47 @@ impl SubPlugin for ConnectPlugin {
                 match key.code {
                     KeyCode::Esc => NavAction::Back,
                     KeyCode::Enter => {
-                        self.open_selected(ctx);
-                        NavAction::None
-                    }
-                    KeyCode::Char('n') => {
-                        self.form = Some(FormState::new(
-                            "New SSH profile",
-                            vec![
-                                FormField::new("name"),
-                                FormField::new("host"),
-                                FormField::new("user").with_value("root"),
-                                FormField::new("port").with_value("22"),
-                                FormField::new("identity_file"),
-                                FormField::new("extra_args"),
-                            ],
-                        ));
-                        self.mode = Mode::Form { editing: None };
-                        NavAction::None
-                    }
-                    KeyCode::Char('e') => {
-                        if let Some(i) = self.list.selected() {
-                            if let Some(p) = self.profiles.get(i) {
-                                self.form = Some(FormState::new(
-                                    "Edit SSH profile",
-                                    vec![
-                                        FormField::new("name").with_value(&p.name),
-                                        FormField::new("host").with_value(&p.host),
-                                        FormField::new("user").with_value(&p.user),
-                                        FormField::new("port").with_value(p.port.to_string()),
-                                        FormField::new("identity_file")
-                                            .with_value(&p.identity_file),
-                                        FormField::new("extra_args").with_value(&p.extra_args),
-                                    ],
-                                ));
-                                self.mode = Mode::Form {
-                                    editing: Some(p.name.clone()),
-                                };
+                        match self.list.selected() {
+                            Some(0) => self.start_new_form(),
+                            Some(i) if i >= 1 => {
+                                let idx = i - 1;
+                                if idx < self.profiles.len() {
+                                    self.open_manage(idx, ctx);
+                                }
                             }
+                            _ => {}
                         }
                         NavAction::None
                     }
-                    KeyCode::Char('d') => {
-                        if let Some(i) = self.list.selected() {
-                            if let Some(p) = self.profiles.get(i) {
-                                self.mode = Mode::Confirm(ConfirmDelete::new(p.name.clone()));
+                    _ => NavAction::None,
+                }
+            }
+            Mode::Manage { index, actions } => {
+                let index = *index;
+                if actions.handle_nav(key) {
+                    return NavAction::None;
+                }
+                match key.code {
+                    KeyCode::Esc => {
+                        self.mode = Mode::List;
+                        ctx.set_status("Enter = manage pane · Esc back");
+                        NavAction::None
+                    }
+                    KeyCode::Enter => {
+                        match actions.selected() {
+                            Some(0) => self.connect_ssh(ctx, index),
+                            Some(1) => self.start_edit_form(index),
+                            Some(2) => {
+                                if let Some(p) = self.profiles.get(index) {
+                                    self.mode =
+                                        Mode::Confirm(ConfirmDelete::new(p.name.clone()));
+                                }
                             }
+                            Some(3) => {
+                                self.mode = Mode::List;
+                                ctx.set_status("Enter = manage pane · Esc back");
+                            }
+                            _ => {}
                         }
                         NavAction::None
                     }
@@ -297,17 +355,33 @@ impl SubPlugin for ConnectPlugin {
     }
 
     fn draw(&self, frame: &mut Frame, area: Rect, _ctx: &PluginCtx) {
-        draw_select_list(
-            frame,
-            area,
-            "Lazy Connect · Enter opens ssh",
-            &self.list.items,
-            self.list.selected(),
-        );
-        if let Mode::Form { .. } = &self.mode {
-            if let Some(form) = &self.form {
-                form.draw(frame, area);
+        match &self.mode {
+            Mode::Manage { index, actions } => {
+                let title = self
+                    .profiles
+                    .get(*index)
+                    .map(|p| format!("Manage · {} ({}@{}:{})", p.name, p.user, p.host, p.port))
+                    .unwrap_or_else(|| "Manage".into());
+                draw_select_list(
+                    frame,
+                    area,
+                    &title,
+                    &actions.items,
+                    actions.selected(),
+                );
             }
+            _ => {
+                draw_select_list(
+                    frame,
+                    area,
+                    "Lazy Connect · Enter opens manage pane",
+                    &self.list.items,
+                    self.list.selected(),
+                );
+            }
+        }
+        if let Some(form) = &self.form {
+            form.draw(frame, area);
         }
         if let Mode::Confirm(confirm) = &self.mode {
             confirm.draw(frame, area);

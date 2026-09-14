@@ -28,15 +28,15 @@ const GUIDE: &str = r#"# Lazy Herd guide
 - Enter — activate / run selected action
 
 ## Sub-plugins
-1. Lazy Git — forge accounts + local git pull/push/commit/branch
-2. Lazy Workspace — save/apply Herdr workspace templates (optional board open)
-3. Lazy Secrets — masked secret store for PATs and tokens
-4. Lazy Connect — SSH profiles; open runs ssh when possible
-5. Lazy Agents — custom agent presets (kind + master prompt)
-6. Lazy Bootstrap — export / import / bootstrap all Lazy Herd data
-7. Lazy Search — terminal-browser launcher + config
-8. Lazy Doctor — environment + plugin health checks
-9. Lazy Config — Lazy Herd settings
+1. Lazy Git — remote repo list after account setup; Enter clones
+2. Lazy Workspace — save/apply Herdr workspace templates
+3. Lazy Secrets — masked PATs (use as Lazy Git secret_ref)
+4. Lazy Connect — Enter opens manage pane (create/edit/delete/SSH)
+5. Lazy Agents — agent presets (kind + master prompt)
+6. Lazy Bootstrap — export / import / bootstrap
+7. Lazy Search — terminal-browser launcher
+8. Lazy Doctor — health checks
+9. Lazy Config — settings
 
 ## Storage
 Config: $HERDR_PLUGIN_CONFIG_DIR (or herdr plugin config-dir lazy-herd)
