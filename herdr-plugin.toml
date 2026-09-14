@@ -1,0 +1,47 @@
+# Lazy Herd — one Herdr plugin with many lazy sub-plugins behind a single menu.
+id = "lazy-herd"
+name = "Lazy Herd"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Split-pane launcher for Lazy Git, Workspace, Secrets, Connect, Agents, Bootstrap, Search, Doctor, and Config — set up once, stay lazy."
+platforms = ["linux", "macos", "windows"]
+
+[[build]]
+platforms = ["linux", "macos"]
+command = ["bash", "scripts/build.sh"]
+
+[[build]]
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/build.ps1"]
+
+[[actions]]
+id = "open"
+title = "Lazy Herd"
+description = "Open the Lazy Herd sub-plugin menu"
+platforms = ["linux", "macos"]
+command = ["bash", "scripts/open.sh"]
+
+[[actions]]
+id = "open-windows"
+title = "Lazy Herd"
+description = "Open the Lazy Herd sub-plugin menu"
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-NonInteractive", "-Command", "& .\\scripts\\open.ps1"]
+
+[[panes]]
+id = "menu"
+title = "Lazy Herd"
+placement = "popup"
+width = "90%"
+height = "80%"
+platforms = ["linux", "macos"]
+command = ["./bin/lazy-herd"]
+
+[[panes]]
+id = "menu-windows"
+title = "Lazy Herd"
+placement = "popup"
+width = "90%"
+height = "80%"
+platforms = ["windows"]
+command = ["powershell", "-NoProfile", "-Command", "& .\\bin\\lazy-herd.exe"]

@@ -1,0 +1,19 @@
+# Rust / plugin build
+/target/
+/bin/
+*.exe
+
+# Local reference forks (not part of the installable plugin)
+/herdr-board-main/
+/herdr-plus-main/
+/herdr-secrets-main/
+/terminal-browser-main/
+/.cursor/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+PLUGIN_README_TMP.md
