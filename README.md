@@ -25,11 +25,11 @@ herdr plugin link .
 ## Run
 
 ```bash
-# Linux / macOS
-herdr plugin action invoke lazy-herd.open
-
 # Windows
 herdr plugin action invoke lazy-herd.open-windows
+
+# Linux / macOS
+herdr plugin action invoke lazy-herd.open
 ```
 
 Optional keybind (`~/.config/herdr/config.toml`):
@@ -38,7 +38,7 @@ Optional keybind (`~/.config/herdr/config.toml`):
 [[keys.command]]
 key = "prefix+l"
 type = "plugin_action"
-command = "lazy-herd.open"   # Windows: lazy-herd.open-windows
+command = "lazy-herd.open-windows"   # Linux/macOS: lazy-herd.open
 ```
 
 ## Menu keys
