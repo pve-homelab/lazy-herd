@@ -272,8 +272,9 @@ impl GitPlugin {
         let dest = Path::new(parent).join(&leaf);
         let dest_str = dest.to_string_lossy().to_string();
 
+        // Already cloned → just jump into it.
         if dest.exists() {
-            self.log = format!("Already on disk — opening workspace:\n{dest_str}");
+            ctx.set_status(format!("already cloned — opening {dest_str}"));
             return self.open_workspace_at(ctx, &dest_str, &leaf);
         }
 
@@ -297,17 +298,23 @@ impl GitPlugin {
             .output()
         {
             Ok(out) => {
-                let mut text = String::from_utf8_lossy(&out.stdout).to_string();
-                if !out.stderr.is_empty() {
-                    text.push('\n');
-                    text.push_str(&String::from_utf8_lossy(&out.stderr));
-                }
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                let combined = format!("{stdout}\n{stderr}");
+                let already = dest.exists()
+                    || combined.to_ascii_lowercase().contains("already exists")
+                    || combined.to_ascii_lowercase().contains("destination path");
+
                 if out.status.success() {
-                    self.log = format!("Cloned {} → {dest_str}\n{text}", repo.name);
+                    self.log = format!("Cloned {} → {dest_str}\n{combined}", repo.name);
                     ctx.set_status(format!("cloned {} — opening workspace…", repo.name));
                     self.open_workspace_at(ctx, &dest_str, &leaf)
+                } else if already && dest.exists() {
+                    // Race / prior clone: treat as success and open.
+                    ctx.set_status("repo already on disk — opening workspace…");
+                    self.open_workspace_at(ctx, &dest_str, &leaf)
                 } else {
-                    self.log = text;
+                    self.log = combined;
                     ctx.set_error(format!("git clone failed for {}", repo.name));
                     false
                 }
@@ -320,20 +327,52 @@ impl GitPlugin {
     }
 
     fn open_workspace_at(&mut self, ctx: &mut PluginCtx, cwd: &str, label: &str) -> bool {
-        match run_herdr_ok(&["workspace", "create", "--cwd", cwd, "--label", label, "--focus"]) {
+        // Prefer a fresh focused workspace rooted at the repo.
+        match run_herdr_ok(&[
+            "workspace",
+            "create",
+            "--cwd",
+            cwd,
+            "--label",
+            label,
+            "--focus",
+        ]) {
             Ok(out) => {
                 self.log = format!(
-                    "Workspace ready at:\n  {cwd}\n\nLazy Herd will close so you can work there.\n{out}"
+                    "Opened workspace at:\n  {cwd}\n\nClosing Lazy Herd so you can work there.\n{out}"
                 );
                 ctx.set_status(format!("working in {cwd}"));
-                true
+                return true;
             }
-            Err(e) => {
-                // Clone may have succeeded; still leave the path clear for the user.
+            Err(create_err) => {
+                // Some Herdr builds may refuse a duplicate cwd — try focusing any
+                // existing workspace whose label matches the repo leaf.
+                if let Ok(list_raw) = run_herdr_ok(&["workspace", "list"]) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&list_raw) {
+                        if let Some(id) = find_workspace_id_by_label(&v, label) {
+                            match run_herdr_ok(&["workspace", "focus", &id]) {
+                                Ok(_) => {
+                                    self.log = format!(
+                                        "Focused existing workspace {id} ({label})\n  {cwd}\n\nClosing Lazy Herd."
+                                    );
+                                    ctx.set_status(format!("focused {label}"));
+                                    return true;
+                                }
+                                Err(focus_err) => {
+                                    self.log = format!(
+                                        "Repo is at:\n  {cwd}\n\nworkspace create failed:\n{create_err}\n\nworkspace focus failed:\n{focus_err}"
+                                    );
+                                    ctx.set_error("could not open/focus workspace — see Output");
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
                 self.log = format!(
-                    "Repo is at:\n  {cwd}\n\nCould not open Herdr workspace automatically:\n{e}\n\nRun manually:\n  herdr workspace create --cwd \"{cwd}\" --label \"{label}\" --focus"
+                    "Repo is at:\n  {cwd}\n\nCould not open Herdr workspace:\n{create_err}\n\nRun:\n  herdr workspace create --cwd \"{cwd}\" --label \"{label}\" --focus"
                 );
-                ctx.set_error("cloned, but workspace create failed — see Output");
+                ctx.set_error("repo ready, but workspace open failed — see Output");
                 false
             }
         }
@@ -397,6 +436,23 @@ fn expand_home(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+fn find_workspace_id_by_label(list_json: &serde_json::Value, label: &str) -> Option<String> {
+    let workspaces = list_json
+        .pointer("/result/workspaces")
+        .or_else(|| list_json.get("workspaces"))
+        .and_then(|w| w.as_array())?;
+    for ws in workspaces {
+        let lbl = ws.get("label").and_then(|x| x.as_str()).unwrap_or("");
+        if lbl == label {
+            return ws
+                .get("workspace_id")
+                .and_then(|x| x.as_str())
+                .map(str::to_string);
+        }
+    }
+    None
 }
 
 fn inject_token_url(url: &str, token: &str, provider: &str) -> Option<String> {
