@@ -55,12 +55,13 @@ command = "lazy-herd.open-windows"   # Linux/macOS: lazy-herd.open
 | Feature | What it does |
 |---|---|
 | **Lazy Git** | Lists your remote repos. Enter → clone → opens a focused Herdr workspace in that folder → closes Lazy Herd so you’re already there. |
-| **Lazy Workspace** | Premade Herdr workspace templates (apply with Enter). Still evolving — try it and tweak. |
+| **Lazy Workspace** | Premade multi-pane workspaces (agents + optional board). `i` installs coding-loop example. |
+| **Lazy Board** | Opens herdr-board kanban when that plugin is installed (Linux/macOS today). |
 | **Lazy Secrets** | Store PATs/tokens (masked). |
 | **Lazy Connect** | SSH profiles. Enter → manage pane (create / edit / delete / connect). |
 | **Lazy Agents** | Agent presets (kind + master prompt). |
 | **Lazy Bootstrap** | Export / import / bootstrap all Lazy Herd config. |
-| **Lazy Search** | Opens URLs. **System browser** works on Windows/macOS/Linux. In-Herdr `terminal-browser` is a separate Linux/macOS plugin — not bundled, often missing. |
+| **Lazy Search** | Built-in text browser inside Lazy Herd (no extra plugin). Optional system-browser open. |
 | **Lazy Doctor** | Health check. |
 | **Lazy Config** | Lazy Herd settings. |
 
@@ -82,7 +83,7 @@ Lazy Herd itself is a **keyboard TUI** (ratatui). It works on:
 |---|---|
 | **Lazy Git** | Needs `git`. Repo list needs `gh` (GitHub) and/or `curl` + PAT, or `glab` (GitLab). |
 | **Lazy Connect** | Needs `ssh`. “Connect” uses `herdr pane split` (needs a live Herdr session). |
-| **Lazy Search** | Needs `terminal-browser` **or** that Herdr plugin for in-terminal browse (Linux/macOS). On Windows use the system-browser menu items. |
+| **Lazy Search** | Built-in. Needs network. System browser is optional. |
 | **Lazy Workspace + board** | Optional `herdr-board` is Linux/macOS-oriented; may be missing on Windows. |
 | **Lazy Agents start** | Best from a real Herdr pane (popup panes may lack `HERDR_PANE_ID`). |
 

@@ -1,6 +1,7 @@
 //! Sub-plugin modules. Add or remove entries in `build_registry` only.
 
 pub mod agents;
+pub mod board;
 pub mod bootstrap;
 pub mod config;
 pub mod connect;
@@ -16,10 +17,10 @@ use crate::registry::PluginRegistry;
 /// Single place to enable/disable sub-plugins.
 pub fn build_registry() -> PluginRegistry {
     let mut reg = PluginRegistry::new();
-    // Docs first so "?" / first-scroll finds the guide quickly.
     reg.register(Box::new(docs::DocsPlugin::new()));
     reg.register(Box::new(git::GitPlugin::new()));
     reg.register(Box::new(workspace::WorkspacePlugin::new()));
+    reg.register(Box::new(board::BoardPlugin::new()));
     reg.register(Box::new(secrets::SecretsPlugin::new()));
     reg.register(Box::new(connect::ConnectPlugin::new()));
     reg.register(Box::new(agents::AgentsPlugin::new()));
@@ -42,6 +43,7 @@ mod tests {
             "docs",
             "git",
             "workspace",
+            "board",
             "secrets",
             "connect",
             "agents",
@@ -52,6 +54,6 @@ mod tests {
         ] {
             assert!(ids.contains(&expected), "missing {expected}");
         }
-        assert_eq!(ids.len(), 10);
+        assert_eq!(ids.len(), 11);
     }
 }
